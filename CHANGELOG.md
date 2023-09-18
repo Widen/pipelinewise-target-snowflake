@@ -1,3 +1,84 @@
+2.3.0 (2023-08-08)
+-------------------
+
+*Changes*
+- Update dependencies:
+    - snowflake-connector-python[pandas]
+    - boto3
+    - pytest
+    - python-dotenv
+
+
+2.2.0 (2022-05-12)
+-------------------
+
+*Changes*
+- Revert use of `ujson` 
+
+
+2.1.0 (2022-05-05)
+-------------------
+
+*Changes*
+- Use `usjon` for JSON encoding/decoding
+
+2.0.1 (2022-04-08)
+-------------------
+
+*Fixes*
+- Only drop pk constraint if table has one
+- Don't raise `PrimaryKeyNotFoundException` when a record has a flasy pk value
+
+
+2.0.0 (2022-03-29)
+-------------------
+
+*Fixes*
+- Respecting `flush_all_streams` when SCHEMA messages arrive.
+- Improve logging for failed merge & copy queries.
+- Drop NOT NULL constraint from primary key columns.
+- Update PK constraints according to changes to SCHEMA's key properties.
+
+*Changes*
+- Dropping support for Python 3.6
+- Adding support for Python 3.9
+- Bump pytest to `7.1.1`
+- Bump boto3 to `1.21`
+
+
+1.15.0 (2022-01-14)
+-------------------
+
+*Added*
+- Support parallelism for table stages
+
+*Fixes*
+- Emit last encountered state message if there are no records.
+
+*Changes*
+- Migrate CI to github actions
+- Bump dependencies
+
+
+1.14.1 (2021-10-14)
+-------------------
+- Increase `max_records` when selecting columns by an order of magnitude
+- Bumping dependencies
+
+1.14.0 (2021-09-30)
+-------------------
+- Add support for `date` property format
+- Stop logging record when error happens
+
+1.13.1 (2021-07-15)
+-------------------
+- Fixed an issue with S3 metadata required for decryption not being included in archived load files.
+
+1.13.0 (2021-06-23)
+-------------------
+- Add `archive_load_files` parameter to optionally archive load files on S3
+- Bumping dependencies
+
 1.12.0 (2021-04-12)
 -------------------
 - Add optional `batch_wait_limit_seconds` parameter

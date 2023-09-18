@@ -6,7 +6,7 @@ import boto3
 import datetime
 
 from snowflake.connector.encryption_util import SnowflakeEncryptionUtil
-from snowflake.connector.remote_storage_util import SnowflakeFileEncryptionMaterial
+from snowflake.connector.storage_client import SnowflakeFileEncryptionMaterial
 
 from .base_upload_client import BaseUploadClient
 
@@ -50,11 +50,9 @@ class S3UploadClient(BaseUploadClient):
         bucket = self.connection_config['s3_bucket']
         s3_acl = self.connection_config.get('s3_acl')
         s3_key_prefix = self.connection_config.get('s3_key_prefix', '')
-        s3_key = "{}pipelinewise_{}_{}_{}".format(s3_key_prefix,
-                                                  stream,
-                                                  datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f"),
-                                                  os.path.basename(file))
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
 
+        s3_key = f"{s3_key_prefix}pipelinewise_{stream}_{timestamp}_{os.path.basename(file)}"
         self.logger.info('Target S3 bucket: %s, local file: %s, S3 key: %s', bucket, file, s3_key)
 
         # Encrypt csv if client side encryption enabled
@@ -73,7 +71,7 @@ class S3UploadClient(BaseUploadClient):
             )
 
             # Upload to s3
-            extra_args = {'ACL': s3_acl} if s3_acl else dict()
+            extra_args = {'ACL': s3_acl} if s3_acl else {}
 
             # Send key and iv in the metadata, that will be required to decrypt and upload the encrypted file
             extra_args['Metadata'] = {
@@ -97,3 +95,13 @@ class S3UploadClient(BaseUploadClient):
         self.logger.info('Deleting %s from external snowflake stage on S3', key)
         bucket = self.connection_config['s3_bucket']
         self.s3_client.delete_object(Bucket=bucket, Key=key)
+
+    def copy_object(self, copy_source: str, target_bucket: str, target_key: str, target_metadata: dict) -> None:
+        """Copy object to another location on S3"""
+        self.logger.info('Copying %s to %s/%s', copy_source, target_bucket, target_key)
+        source_bucket, source_key = copy_source.split("/", 1)
+        metadata = self.s3_client.head_object(Bucket=source_bucket, Key=source_key).get('Metadata', {})
+        metadata.update(target_metadata)
+        # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.copy_object
+        self.s3_client.copy_object(CopySource=copy_source, Bucket=target_bucket, Key=target_key,
+                                   Metadata=metadata, MetadataDirective="REPLACE")

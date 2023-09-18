@@ -8,6 +8,7 @@ from decimal import Decimal
 from singer import get_logger
 
 from target_snowflake.exceptions import UnexpectedValueTypeException
+from target_snowflake.exceptions import UnexpectedMessageTypeException
 
 LOGGER = get_logger('target_snowflake')
 
@@ -115,3 +116,16 @@ def stream_name_to_dict(stream_name, separator='-'):
         'schema_name': schema_name,
         'table_name': table_name
     }
+
+
+def get_incremental_key(singer_msg: Dict):
+    """Derive incremental key from a Singer message dictionary"""
+    if singer_msg['type'] != "SCHEMA":
+        raise UnexpectedMessageTypeException(f"Expecting type SCHEMA, got {singer_msg['type']}")
+
+    if 'bookmark_properties' in singer_msg and len(singer_msg['bookmark_properties']) > 0:
+        col = singer_msg['bookmark_properties'][0]
+        if col in singer_msg['schema']['properties']:
+            return col
+
+    return None
