@@ -4,6 +4,9 @@ import snowflake.connector
 import re
 import time
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+
 from typing import List, Dict, Union, Tuple, Set
 from singer import get_logger
 from target_snowflake import flattening
@@ -18,6 +21,10 @@ from target_snowflake.upload_clients.snowflake_upload_client import SnowflakeUpl
 def validate_config(config):
     """Validate configuration"""
     errors = []
+
+    # When using RSA key pair auth, password is not required
+    using_key_pair = bool(config.get('private_key_path'))
+
     s3_required_config_keys = [
         'account',
         'dbname',
@@ -33,10 +40,13 @@ def validate_config(config):
         'account',
         'dbname',
         'user',
-        'password',
         'warehouse',
         'file_format'
     ]
+
+    # password is required unless RSA key pair auth is used
+    if not using_key_pair:
+        snowflake_required_config_keys.insert(3, 'password')
 
     required_config_keys = []
 
@@ -291,9 +301,10 @@ class DbSync:
         if self.stream_schema_message:
             stream = self.stream_schema_message['stream']
 
-        return snowflake.connector.connect(
+        private_key_path = self.connection_config.get('private_key_path')
+
+        connect_kwargs = dict(
             user=self.connection_config['user'],
-            password=self.connection_config['password'],
             account=self.connection_config['account'],
             database=self.connection_config['dbname'],
             warehouse=self.connection_config['warehouse'],
@@ -308,6 +319,26 @@ class DbSync:
                                               table=self.table_name(stream, False, True))
             }
         )
+
+        if private_key_path:
+            # RSA key pair authentication — no password required
+            passphrase = self.connection_config.get('private_key_passphrase')
+            with open(private_key_path, 'rb') as pem_file:
+                private_key = load_pem_private_key(
+                    pem_file.read(),
+                    password=passphrase.encode() if passphrase else None,
+                    backend=default_backend()
+                )
+            connect_kwargs['private_key'] = private_key.private_bytes(
+                encoding=Encoding.DER,
+                format=PrivateFormat.PKCS8,
+                encryption_algorithm=NoEncryption()
+            )
+        else:
+            # Plain username/password authentication
+            connect_kwargs['password'] = self.connection_config['password']
+
+        return snowflake.connector.connect(**connect_kwargs)
 
     def query(self, query: Union[str, List[str]], params: Dict = None, max_records=0) -> List[Dict]:
         """Run an SQL query in snowflake"""

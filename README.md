@@ -99,6 +99,19 @@ GRANT ROLE ppw_target_snowflake TO USER {user};
 
 Replace `warehouse` between `{` and `}` characters to the actual values from point 3.
 
+If you want to authenticate with an RSA private key (`private_key_path`) instead of password:
+
+```
+ALTER USER {user} SET RSA_PUBLIC_KEY='{rsa_public_key_without_headers}';
+```
+
+Generate the key pair locally and keep the private key secure:
+
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+```
+
 4. **Optional external stage**:
 
 By default [table stages](https://docs.snowflake.com/en/user-guide/data-load-local-file-system-create-stage.html#table-stages) are used to load data into snowflake tables. If you want to use external stages with s3 or s3 compatible storage engines then you need to create a STAGE object:
@@ -121,7 +134,7 @@ Further details below in the Configuration settings section.
 
 ### Configuration settings
 
-Running the the target connector requires a `config.json` file. Example with the minimal settings:
+Running the the target connector requires a `config.json` file. Example with minimal password-based settings:
 
    ```json
    {
@@ -136,6 +149,21 @@ Running the the target connector requires a `config.json` file. Example with the
    }
    ```
 
+Example with RSA key pair authentication:
+
+   ```json
+   {
+     "account": "rtxxxxx.eu-central-1",
+     "dbname": "database_name",
+     "user": "my_user",
+     "private_key_path": "/secure/path/rsa_key.p8",
+     "private_key_passphrase": "optional_passphrase",
+     "warehouse": "my_virtual_warehouse",
+     "file_format": "snowflake_file_format_object_name",
+     "default_target_schema": "my_target_schema"
+   }
+   ```
+
 Full list of options in `config.json`:
 
 | Property                            | Type    | Required?  | Description                                                   |
@@ -143,7 +171,9 @@ Full list of options in `config.json`:
 | account                             | String  | Yes        | Snowflake account name (i.e. rtXXXXX.eu-central-1)            |
 | dbname                              | String  | Yes        | Snowflake Database name                                       |
 | user                                | String  | Yes        | Snowflake User                                                |
-| password                            | String  | Yes        | Snowflake Password                                            |
+| password                            | String  | Conditional | Snowflake Password. Required for password authentication and for external S3 stage configs. |
+| private_key_path                    | String  | No         | Absolute path to an RSA private key in PKCS8 PEM format for Snowflake key pair authentication. |
+| private_key_passphrase              | String  | No         | Passphrase for encrypted `private_key_path`. |
 | warehouse                           | String  | Yes        | Snowflake virtual warehouse name                              |
 | role                                | String  | No         | Snowflake role to use. If not defined then the user's default role will be used |
 | aws_access_key_id                   | String  | No         | S3 Access Key Id. If not provided, `AWS_ACCESS_KEY_ID` environment variable or IAM role will be used |
