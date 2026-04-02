@@ -71,11 +71,37 @@ class TestDBSync(unittest.TestCase):
         }
         self.assertEqual(len(validator(config_with_schema_mapping)), 0)
 
+        # Configuration with Snowflake private key auth (password not required)
+        config_with_private_key = minimal_config.copy()
+        config_with_private_key.pop('password')
+        config_with_private_key['private_key'] = (
+            '-----BEGIN PRIVATE KEY-----\\n'
+            'dummy-private-key\\n'
+            '-----END PRIVATE KEY-----'
+        )
+        self.assertEqual(len(validator(config_with_private_key)), 0)
+
+        # private_key_path is no longer supported
+        config_with_private_key_path = minimal_config.copy()
+        config_with_private_key_path.pop('password')
+        config_with_private_key_path['private_key_path'] = '/secure/path/rsa_key.p8'
+        self.assertGreater(len(validator(config_with_private_key_path)), 0)
+
         # Configuration with external stage
         config_with_external_stage = minimal_config.copy()
         config_with_external_stage['s3_bucket'] = 'dummy-value'
         config_with_external_stage['stage'] = 'dummy-value'
         self.assertEqual(len(validator(config_with_external_stage)), 0)
+
+        # External stage still requires password even when private_key is defined
+        config_with_external_stage_key_auth = config_with_external_stage.copy()
+        config_with_external_stage_key_auth.pop('password')
+        config_with_external_stage_key_auth['private_key'] = (
+            '-----BEGIN PRIVATE KEY-----\\n'
+            'dummy-private-key\\n'
+            '-----END PRIVATE KEY-----'
+        )
+        self.assertGreater(len(validator(config_with_external_stage_key_auth)), 0)
 
         # Configuration with invalid stage: Only s3_bucket defined - (nr_of_errors >= 0)
         config_with_external_stage = minimal_config.copy()

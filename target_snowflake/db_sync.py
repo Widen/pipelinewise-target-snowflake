@@ -23,7 +23,7 @@ def validate_config(config):
     errors = []
 
     # When using RSA key pair auth, password is not required
-    using_key_pair = bool(config.get('private_key_path'))
+    using_key_pair = bool(config.get('private_key'))
 
     s3_required_config_keys = [
         'account',
@@ -301,7 +301,7 @@ class DbSync:
         if self.stream_schema_message:
             stream = self.stream_schema_message['stream']
 
-        private_key_path = self.connection_config.get('private_key_path')
+        private_key_content = self.connection_config.get('private_key')
 
         connect_kwargs = dict(
             user=self.connection_config['user'],
@@ -320,15 +320,18 @@ class DbSync:
             }
         )
 
-        if private_key_path:
+        if private_key_content:
             # RSA key pair authentication — no password required
             passphrase = self.connection_config.get('private_key_passphrase')
-            with open(private_key_path, 'rb') as pem_file:
-                private_key = load_pem_private_key(
-                    pem_file.read(),
-                    password=passphrase.encode() if passphrase else None,
-                    backend=default_backend()
-                )
+
+            # Support private keys provided as multiline PEM or escaped \n string
+            pem_data = private_key_content.replace('\\n', '\n').encode('utf-8')
+
+            private_key = load_pem_private_key(
+                pem_data,
+                password=passphrase.encode() if passphrase else None,
+                backend=default_backend()
+            )
             connect_kwargs['private_key'] = private_key.private_bytes(
                 encoding=Encoding.DER,
                 format=PrivateFormat.PKCS8,

@@ -99,7 +99,7 @@ GRANT ROLE ppw_target_snowflake TO USER {user};
 
 Replace `warehouse` between `{` and `}` characters to the actual values from point 3.
 
-If you want to authenticate with an RSA private key (`private_key_path`) instead of password:
+If you want to authenticate with an RSA private key (`private_key`) instead of password:
 
 ```
 ALTER USER {user} SET RSA_PUBLIC_KEY='{rsa_public_key_without_headers}';
@@ -156,7 +156,7 @@ Example with RSA key pair authentication:
      "account": "rtxxxxx.eu-central-1",
      "dbname": "database_name",
      "user": "my_user",
-     "private_key_path": "/secure/path/rsa_key.p8",
+     "private_key": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----",
      "private_key_passphrase": "optional_passphrase",
      "warehouse": "my_virtual_warehouse",
      "file_format": "snowflake_file_format_object_name",
@@ -172,8 +172,8 @@ Full list of options in `config.json`:
 | dbname                              | String  | Yes        | Snowflake Database name                                       |
 | user                                | String  | Yes        | Snowflake User                                                |
 | password                            | String  | Conditional | Snowflake Password. Required for password authentication and for external S3 stage configs. |
-| private_key_path                    | String  | No         | Absolute path to an RSA private key in PKCS8 PEM format for Snowflake key pair authentication. |
-| private_key_passphrase              | String  | No         | Passphrase for encrypted `private_key_path`. |
+| private_key                         | String  | No         | RSA private key in PKCS8 PEM format for Snowflake key pair authentication. Supports multiline PEM or `\\n` escaped content. |
+| private_key_passphrase              | String  | No         | Passphrase for encrypted `private_key`. |
 | warehouse                           | String  | Yes        | Snowflake virtual warehouse name                              |
 | role                                | String  | No         | Snowflake role to use. If not defined then the user's default role will be used |
 | aws_access_key_id                   | String  | No         | S3 Access Key Id. If not provided, `AWS_ACCESS_KEY_ID` environment variable or IAM role will be used |
