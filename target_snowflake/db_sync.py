@@ -64,7 +64,7 @@ def validate_config(config):
     # Check if mandatory keys exist
     for k in required_config_keys:
         if not config.get(k, None):
-            errors.append(f"Required key is missing from config: [{k}]")
+            errors.append(f"Required key is missing from config Debug: [{k}]")
 
     # Check target schema config
     config_default_target_schema = config.get('default_target_schema', None)
