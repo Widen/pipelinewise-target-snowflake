@@ -29,7 +29,6 @@ def validate_config(config):
         'account',
         'dbname',
         'user',
-        'password',
         'warehouse',
         's3_bucket',
         'stage',
@@ -44,8 +43,9 @@ def validate_config(config):
         'file_format'
     ]
 
-    # password is required unless RSA key pair auth is used
+    # password is required unless RSA key pair auth (private_key) is used
     if not using_key_pair:
+        s3_required_config_keys.insert(3, 'password')
         snowflake_required_config_keys.insert(3, 'password')
 
     required_config_keys = []
