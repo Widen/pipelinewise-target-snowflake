@@ -303,6 +303,21 @@ class DbSync:
 
         private_key_content = self.connection_config.get('private_key')
 
+        # Build session parameters
+        session_parameters = {
+            # Quoted identifiers should be case sensitive
+            'QUOTED_IDENTIFIERS_IGNORE_CASE': 'FALSE',
+            'QUERY_TAG': create_query_tag(self.connection_config.get('query_tag'),
+                                          database=self.connection_config['dbname'],
+                                          schema=self.schema_name,
+                                          table=self.table_name(stream, False, True))
+        }
+
+        # Add statement timeout if configured (in seconds)
+        statement_timeout = self.connection_config.get('statement_timeout')
+        if statement_timeout:
+            session_parameters['STATEMENT_TIMEOUT_IN_SECONDS'] = int(statement_timeout)
+
         connect_kwargs = dict(
             user=self.connection_config['user'],
             account=self.connection_config['account'],
@@ -310,15 +325,17 @@ class DbSync:
             warehouse=self.connection_config['warehouse'],
             role=self.connection_config.get('role', None),
             autocommit=True,
-            session_parameters={
-                # Quoted identifiers should be case sensitive
-                'QUOTED_IDENTIFIERS_IGNORE_CASE': 'FALSE',
-                'QUERY_TAG': create_query_tag(self.connection_config.get('query_tag'),
-                                              database=self.connection_config['dbname'],
-                                              schema=self.schema_name,
-                                              table=self.table_name(stream, False, True))
-            }
+            session_parameters=session_parameters
         )
+
+        # Add optional timeout parameters
+        login_timeout = self.connection_config.get('login_timeout')
+        if login_timeout:
+            connect_kwargs['login_timeout'] = int(login_timeout)
+
+        network_timeout = self.connection_config.get('network_timeout')
+        if network_timeout:
+            connect_kwargs['network_timeout'] = int(network_timeout)
 
         if private_key_content:
             # RSA key pair authentication — no password required
