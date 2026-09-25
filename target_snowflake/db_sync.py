@@ -4,6 +4,9 @@ import snowflake.connector
 import re
 import time
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+
 from typing import List, Dict, Union, Tuple, Set
 from singer import get_logger
 from target_snowflake import flattening
@@ -18,11 +21,14 @@ from target_snowflake.upload_clients.snowflake_upload_client import SnowflakeUpl
 def validate_config(config):
     """Validate configuration"""
     errors = []
+
+    # When using RSA key pair auth, password is not required
+    using_key_pair = bool(config.get('private_key'))
+
     s3_required_config_keys = [
         'account',
         'dbname',
         'user',
-        'password',
         'warehouse',
         's3_bucket',
         'stage',
@@ -33,10 +39,14 @@ def validate_config(config):
         'account',
         'dbname',
         'user',
-        'password',
         'warehouse',
         'file_format'
     ]
+
+    # password is required unless RSA key pair auth (private_key) is used
+    if not using_key_pair:
+        s3_required_config_keys.insert(3, 'password')
+        snowflake_required_config_keys.insert(3, 'password')
 
     required_config_keys = []
 
@@ -54,7 +64,7 @@ def validate_config(config):
     # Check if mandatory keys exist
     for k in required_config_keys:
         if not config.get(k, None):
-            errors.append(f"Required key is missing from config: [{k}]")
+            errors.append(f"Required key is missing from config Debug: [{k}]")
 
     # Check target schema config
     config_default_target_schema = config.get('default_target_schema', None)
@@ -291,23 +301,64 @@ class DbSync:
         if self.stream_schema_message:
             stream = self.stream_schema_message['stream']
 
-        return snowflake.connector.connect(
+        private_key_content = self.connection_config.get('private_key')
+
+        # Build session parameters
+        session_parameters = {
+            # Quoted identifiers should be case sensitive
+            'QUOTED_IDENTIFIERS_IGNORE_CASE': 'FALSE',
+            'QUERY_TAG': create_query_tag(self.connection_config.get('query_tag'),
+                                          database=self.connection_config['dbname'],
+                                          schema=self.schema_name,
+                                          table=self.table_name(stream, False, True))
+        }
+
+        # Add statement timeout if configured (in seconds)
+        statement_timeout = self.connection_config.get('statement_timeout')
+        if statement_timeout:
+            session_parameters['STATEMENT_TIMEOUT_IN_SECONDS'] = int(statement_timeout)
+
+        connect_kwargs = dict(
             user=self.connection_config['user'],
-            password=self.connection_config['password'],
             account=self.connection_config['account'],
             database=self.connection_config['dbname'],
             warehouse=self.connection_config['warehouse'],
             role=self.connection_config.get('role', None),
             autocommit=True,
-            session_parameters={
-                # Quoted identifiers should be case sensitive
-                'QUOTED_IDENTIFIERS_IGNORE_CASE': 'FALSE',
-                'QUERY_TAG': create_query_tag(self.connection_config.get('query_tag'),
-                                              database=self.connection_config['dbname'],
-                                              schema=self.schema_name,
-                                              table=self.table_name(stream, False, True))
-            }
+            session_parameters=session_parameters
         )
+
+        # Add optional timeout parameters
+        login_timeout = self.connection_config.get('login_timeout')
+        if login_timeout:
+            connect_kwargs['login_timeout'] = int(login_timeout)
+
+        network_timeout = self.connection_config.get('network_timeout')
+        if network_timeout:
+            connect_kwargs['network_timeout'] = int(network_timeout)
+
+        if private_key_content:
+            # RSA key pair authentication — no password required
+            passphrase = self.connection_config.get('private_key_passphrase')
+
+            # Support private keys provided as multiline PEM or escaped \n string
+            pem_data = private_key_content.replace('\\n', '\n').encode('utf-8')
+
+            private_key = load_pem_private_key(
+                pem_data,
+                password=passphrase.encode() if passphrase else None,
+                backend=default_backend()
+            )
+            connect_kwargs['private_key'] = private_key.private_bytes(
+                encoding=Encoding.DER,
+                format=PrivateFormat.PKCS8,
+                encryption_algorithm=NoEncryption()
+            )
+        else:
+            # Plain username/password authentication
+            connect_kwargs['password'] = self.connection_config['password']
+
+        return snowflake.connector.connect(**connect_kwargs)
 
     def query(self, query: Union[str, List[str]], params: Dict = None, max_records=0) -> List[Dict]:
         """Run an SQL query in snowflake"""
